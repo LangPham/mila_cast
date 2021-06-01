@@ -1,6 +1,7 @@
 package mila_cast
 
 import (
+	"github.com/LangPham/mila_cast/aon"
 	"reflect"
 	"strconv"
 	"strings"
@@ -18,6 +19,31 @@ func newReflectValue(oldValue reflect.Value, req string) (copy reflect.Value) {
 		}
 	}
 	return newModel
+}
+
+func setField(field *reflect.Value, fieldName string, fieldValue string, change *hashmap.Map, mError *hashmap.Map) {
+	change.Put(fieldName, fieldValue)
+	rKind := field.Kind()
+	switch rKind {
+	case reflect.String:
+		field.SetString(fieldValue)
+	case reflect.Int:
+		valueInt, err := strconv.Atoi(fieldValue)
+		if err != nil && fieldValue != "" {
+			mError.Put(fieldName, "Please input number!")
+		} else {
+			field.SetInt(int64(valueInt))
+		}
+	case reflect.Bool:
+		valueBool, err := strconv.ParseBool(fieldValue)
+		if err != nil {
+			mError.Put(fieldName, "Please input boolean!")
+		} else {
+			field.SetBool(valueBool)
+		}
+	default:
+		//aon.Dump(rKind, "rKind")
+	}
 }
 
 func Cast(modelIn interface{}, c *fiber.Ctx) (exchange Exchange) {
@@ -49,22 +75,26 @@ func Cast(modelIn interface{}, c *fiber.Ctx) (exchange Exchange) {
 		//value := c.FormValue()
 		//strings.Split(newModel.Type().Field(i).Tag.(string), " ")
 		fieldName := newModel.Type().Field(i).Tag.Get("cast")
-		if fieldName != "" {
-			fieldValue := c.FormValue(fieldName)
-			change.Put(fieldName, fieldValue)
-			//aon.Dump(newModel.Type().Field(i).Type.String(), "TYPE")
-			switch newModel.Type().Field(i).Type.String() {
-			case "string":
-				newModel.Field(i).SetString(fieldValue)
-			case "int":
-				//aon.Dump(fieldValue, "VAL INT")
-				valueInt, err := strconv.Atoi(fieldValue)
-				if err != nil {
-					mError.Put(fieldName, "Please input number!")
-				} else {
-					newModel.Field(i).SetInt(int64(valueInt))
+
+		switch {
+		case fieldName == "mixin":
+			//aon.Dump(newModel.Field(i).Kind(), "mixin")
+			rv := reflect.Indirect(newModel.Field(i))
+
+			//aon.Dump(rv.Field(0).CanSet(), "mixin")
+			for j := 0; j < rv.NumField(); j++ {
+				fieldNameSub := rv.Type().Field(j).Tag.Get("cast")
+				aon.Dump(fieldNameSub, "In mixin")
+				if fieldNameSub != "" {
+					fieldValue := c.FormValue(fieldNameSub)
+					field := rv.Field(j)
+					setField(&field, fieldNameSub, fieldValue, change, mError)
 				}
 			}
+		case fieldName != "":
+			fieldValue := c.FormValue(fieldName)
+			field := newModel.Field(i)
+			setField(&field, fieldName, fieldValue, change, mError)
 		}
 	}
 
@@ -75,6 +105,6 @@ func Cast(modelIn interface{}, c *fiber.Ctx) (exchange Exchange) {
 	exchange.DataType = dataType
 	exchange.Change = change
 	exchange.Error = mError
-
+	exchange.Valid = mError.Empty()
 	return
 }
