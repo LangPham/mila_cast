@@ -1,7 +1,6 @@
 package mila_cast
 
 import (
-	"github.com/LangPham/mila_cast/aon"
 	"reflect"
 	"strconv"
 	"strings"
@@ -84,7 +83,7 @@ func Cast(modelIn interface{}, c *fiber.Ctx) (exchange Exchange) {
 			//aon.Dump(rv.Field(0).CanSet(), "mixin")
 			for j := 0; j < rv.NumField(); j++ {
 				fieldNameSub := rv.Type().Field(j).Tag.Get("cast")
-				aon.Dump(fieldNameSub, "In mixin")
+
 				if fieldNameSub != "" {
 					fieldValue := c.FormValue(fieldNameSub)
 					field := rv.Field(j)
